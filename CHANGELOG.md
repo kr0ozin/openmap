@@ -1,5 +1,14 @@
 # OpenMap changelog
 
+## v0.8.10-deck2 (test build)
+
+### Fixed (the controller view, with the Gamepad UI)
+
+- **Quest areas stay put while zooming**: the hovered quest's area was drawn for the zoom before
+  the last one and stayed there until the cursor left the icon.
+- **The focused quest**: its icon is in Blizzard's gold look for a focused quest, and its area stays
+  shown when the cursor isn't on another quest (as after A moves the map to it).
+
 ## v0.8.10-deck1 (test build)
 
 ### Fixed (the controller view, with the Gamepad UI)

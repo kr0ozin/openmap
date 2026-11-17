@@ -4,6 +4,10 @@
 local _, ns = ...
 
 ns.MapChangelog = {
+	{ version = "v0.8.10-deck2 (test build)", date = "", heads = { [1] = "Fixed (the controller view, with the Gamepad UI)", }, items = {
+		"|cff6e2c0aQuest areas stay put while zooming|r: the hovered quest's area was drawn for the zoom before the last one and stayed there until the cursor left the icon.",
+		"|cff6e2c0aThe focused quest|r: its icon is in Blizzard's gold look for a focused quest, and its area stays shown when the cursor isn't on another quest (as after A moves the map to it).",
+	} },
 	{ version = "v0.8.10-deck1 (test build)", date = "", heads = { [1] = "Fixed (the controller view, with the Gamepad UI)", }, items = {
 		"|cff6e2c0aOpens where Options say|r: \"When reopening the map\" (center on player, keep zoom, your zone, remember) now applies in the controller view too; it used to open on you only the first time.",
 		"|cff6e2c0aPlace names under the cursor|r: the zone (with its levels) or the area under the gamepad's cursor is named at the top of the map, as with the mouse. Blizzard's own label, which named places on its map hidden under the view, is hidden while the view is up.",
@@ -63,9 +67,5 @@ ns.MapChangelog = {
 	} },
 	{ version = "v0.8.7", date = "2026-11-12", heads = { [1] = "Fixed", }, items = {
 		"|cff6e2c0aQuestie's icons show on the first map you open|r: with Questie 12.8, a map opened on a zone showed none of Questie's icons (their tooltips still came up) until you'd zoomed out to the continent once: icons Questie placed before the map was first opened stayed under its art (#194, #193, #195).",
-	} },
-	{ version = "v0.8.6", date = "2026-11-12", heads = { [1] = "Improved", [2] = "Fixed", }, items = {
-		"|cff6e2c0aIcons stay shown while zooming|r: \"Fade icons while zooming\" is now off for everyone, as zooming is smooth enough with them shown; turn it on again in the menu's On the map tab if you prefer it.",
-		"|cff6e2c0aQuestie's icons show again with Questie 12.8|r: Questie 12.8 brings its map icons a new way (its own module, with a new name), which OpenMap didn't know, so they were left off the map; and each icon Questie drew again sank under the map's art, so they faded away one by one. Older Questie versions work as before (#18). With bv101rj. Questie 12.8 hides its objective icons (mobs to kill, items to loot) until you turn them on: /questie, Icon Options, Objectives.",
 	} },
 }

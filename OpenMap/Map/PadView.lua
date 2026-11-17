@@ -72,7 +72,8 @@ local overWindow, wheelFrame    -- the pad's cursor over one of OpenMap's window
 local wheelWait = 0
 local stickZoomAt = -10         -- when the right stick last zoomed the view (GetTime)
 local WHEEL_EVERY = 0.12        -- seconds between the right stick's wheel notches at full tilt
-local area = {}                 -- the hovered quest's area: { frame, quest, map, failed } (PadQuestArea)
+local area = {}                 -- the quest's area: { frame, quest, map (drawn), hoverQ/M, focusQ/M, failed }
+local DrawArea                  -- (below: Apply redraws the area with it)
 local diag = { started = 0, setup = "not yet", shows = 0, why = "not tried yet" }   -- (/openmap padview)
 
 local function Clamp(x, lo, hi) return math.max(lo, math.min(hi, x)) end
@@ -162,7 +163,7 @@ local function Apply()
 	S.PlacePlayer()
 	PlaceQuestie()
 	-- (the quest's area drawn again for the new scale, as Blizzard redraws its own: WorldMap.lua's SetView)
-	if area.quest and area.frame then pcall(area.frame.DrawBlob, area.frame, area.quest, true) end
+	if area.quest and area.frame then DrawArea(area.frame, area.quest) end
 end
 
 -- to zoom `to`, the world point under the view offset (sx, sy) kept there
@@ -363,13 +364,27 @@ local function PlaceLabel(x, y)
 	f:Show()
 end
 
--- The hovered quest's area (Quests.lua's icons), as Blizzard's map shades it for its own quest icons (its
--- QuestBlobPin, a QuestPOIFrame on its canvas). Blizzard's is on its map under this view, unseen: this is
--- OpenMap's own QuestPOIFrame, on this view's canvas over the quest's zone, over the art and under the
--- icons. A client without the frame type: no area, as before. (questID nil: none)
-function mod.PadQuestArea(questID, mapID)
+-- The quest's area (Quests.lua's icons), as Blizzard's map shades it for its own quest icons (its
+-- QuestBlobPin, a QuestPOIFrame on its canvas): the hovered quest's, else the focused (super-tracked)
+-- one's, as Blizzard's shows. Blizzard's is on its map under this view, unseen: this is OpenMap's own
+-- QuestPOIFrame, on this view's canvas over the quest's zone, over the art and under the icons. A client
+-- without the frame type: no area, as before.
+
+-- the area drawn for the frame's place on screen now. The game works that place out only as it next lays
+-- the frames out: drawn from the last one, after a zoom, the area was drawn for the zoom before it and
+-- stayed there (WorldMap.lua's SetView does the same for Blizzard's)
+function DrawArea(f, questID)
+	canvas:GetRect()
+	f:GetRect()
+	pcall(f.DrawNone, f)
+	return pcall(f.DrawBlob, f, questID, true)
+end
+
+local function ShowArea()
 	local f = area.frame
-	if not (questID and mapID and built and On() and S.Rect(mapID)) then
+	local questID, mapID = area.hoverQ, area.hoverM
+	if not questID then questID, mapID = area.focusQ, area.focusM end
+	if not (questID and mapID and built and On() and view:IsShown() and S.Rect(mapID)) then
 		if f then
 			pcall(f.DrawNone, f)
 			f:Hide()
@@ -398,11 +413,20 @@ function mod.PadQuestArea(questID, mapID)
 	f:SetPoint("TOPLEFT", canvas, "TOPLEFT", l * W, -t * H)   -- (canvas units, as the art's)
 	f:SetSize((r - l) * W, (b - t) * H)
 	if f.SetMapID then pcall(f.SetMapID, f, mapID) end
-	pcall(f.DrawNone, f)
 	f:Show()
-	local ok = pcall(f.DrawBlob, f, questID, true)
-	if not ok then f:Hide() return end
+	if not DrawArea(f, questID) then f:Hide() return end
 	area.quest, area.map = questID, mapID
+end
+
+-- for Quests.lua: the quest under the pad's cursor (nil: none) ...
+function mod.PadQuestArea(questID, mapID)
+	area.hoverQ, area.hoverM = questID, questID and mapID or nil
+	ShowArea()
+end
+-- ... and the focused one, shown while none is hovered (nil: none)
+function mod.PadQuestFocus(questID, mapID)
+	area.focusQ, area.focusM = questID, questID and mapID or nil
+	ShowArea()
 end
 
 --------------------------------------------------------------------------------
@@ -899,7 +923,8 @@ local function Hide()
 	view:Hide()
 	if pointer then pointer:Hide() end
 	PlaceLabel(nil)
-	mod.PadQuestArea(nil)
+	area.hoverQ, area.hoverM = nil, nil
+	ShowArea()
 	if built then pcall(place.Blizzard, 1) end
 	glide, lastX, lastY = nil, nil, nil
 	if sc and sc.Child then sc.Child:SetAlpha(1) end
