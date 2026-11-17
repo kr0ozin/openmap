@@ -70,6 +70,13 @@ local function Enter(pin)
 	GameTooltip:AddLine((PadView() or (map and map.IsMaximized and map:IsMaximized())) and L["Click: track this quest and zoom to it"]
 		or L["Click: track this quest, zoom to it and show it in the quest log"], 0.6, 0.6, 0.6)
 	GameTooltip:Show()
+	-- (the controller view: the quest's area, as Blizzard's map shows it for its own icons: PadView.lua)
+	if PadView() and mod.PadQuestArea then mod.PadQuestArea(q.id, q.map) end
+end
+
+local function Leave()
+	GameTooltip_Hide()
+	if mod.PadQuestArea then mod.PadQuestArea(nil) end
 end
 
 -- a quest you can start: its name, and the quest line it begins (the game's own words)
@@ -168,7 +175,7 @@ local function ReadMap(r, mapID)
 			if key and not r.seen[key] and not onHost then
 				r.seen[key] = true
 				r.ids[id] = true
-				r.found[#r.found + 1] = { u, v, id, C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) or false }
+				r.found[#r.found + 1] = { u, v, id, C_QuestLog.IsComplete and C_QuestLog.IsComplete(id) or false, mapID }
 			end
 		end
 	end
@@ -182,10 +189,10 @@ local function Draw(r)
 	end
 	S.ClearPinSet(set)
 	for _, f in ipairs(r.found) do
-		local pin = S.AddPin(set, f[1], f[2], BADGE, { id = f[3], complete = f[4] })
+		local pin = S.AddPin(set, f[1], f[2], BADGE, { id = f[3], complete = f[4], map = f[5] })
 		Mark(pin, f[4])
 		pin:SetScript("OnEnter", Enter)
-		pin:SetScript("OnLeave", GameTooltip_Hide)
+		pin:SetScript("OnLeave", Leave)
 		pin.OnClick = Click
 	end
 	if r.pad then Offers(r.ids) end
