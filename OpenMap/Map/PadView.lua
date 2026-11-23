@@ -1092,6 +1092,10 @@ function mod.PadViewDiag()
 		diag.panel or tostring(mod.PanelBuilt and mod.PanelBuilt() or false))
 	ns:Print("Quest log: hooked %s; last: %s. Corpse: %s.", diag.questHooks or "nothing", diag.quest or "none picked yet",
 		diag.corpse or "not looked for yet")
+	if mod.QuestsPadDiag then
+		local ok, line = pcall(mod.QuestsPadDiag)
+		ns:Print("%s", ok and line or ("Quest icons: " .. tostring(line)))
+	end
 end
 
 -- The waypoint. Blizzard's own, the left stick pressed (GamepadTryPlaceWaypoint), goes where its cursor is

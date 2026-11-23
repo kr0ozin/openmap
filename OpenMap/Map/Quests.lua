@@ -306,6 +306,20 @@ function mod.QuestsStatus()
 		lastRead.zones, lastRead.ms, lastRead.frames, lastRead.worst, reading and "; reading again now" or "")
 end
 
+-- for /openmap padview: where the controller view's quest icons stand (none up: which step stopped them)
+function mod.QuestsPadDiag()
+	local first = drawn[1]
+	local cell = first and first:GetParent()
+	return ("Quest icons: set %s, on %s, shown %s, visible %s; %d up%s; read %s%s; all quests %s, Quest Objectives %s, view %s."):format(
+		set and "made" or "not made", tostring(set and set.on), tostring(set and set.shownNow),
+		tostring(set and set.frame:IsVisible() or false), #drawn,
+		first and (" (the first: shown %s, visible %s, its cell %s, at %.3f, %.3f)"):format(tostring(first:IsShown()),
+			tostring(first:IsVisible()), tostring(cell and cell:IsShown()), first.u or -1, first.v or -1) or "",
+		lastRead and (lastRead.zones .. " zones") or "not yet", reading and ", reading now" or "",
+		tostring(mod.db.allQuests ~= false), tostring(not (GetCVarBool and not GetCVarBool("questPOI"))),
+		tostring(PadView() and true or false))
+end
+
 function mod:RefreshQuests()
 	dirty = false
 	reading = nil                                   -- (one under way was for how things were)
