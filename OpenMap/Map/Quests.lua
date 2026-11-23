@@ -120,6 +120,28 @@ local function Focus()
 	if mod.PadQuestFocus then mod.PadQuestFocus(found and tracked or nil, found and found.data.map or nil) end
 end
 
+-- for PadView.lua: where a quest's icon is (world, normalized) and the map it's from. Its icon up now (the
+-- one on `mapID`, the quest log's map for it, if it has one there), else read from that map, as the icons
+-- are; nil: no icon (as Blizzard's map shows none)
+function mod.QuestWorld(questID, mapID)
+	local other
+	for _, pin in ipairs(drawn) do
+		local q = pin.data
+		if q and q.id == questID then
+			if q.map == mapID then return pin.u, pin.v, q.map end
+			other = other or pin
+		end
+	end
+	if other then return other.u, other.v, other.data.map end
+	if not (mapID and S.Rect(mapID) and C_QuestLog.GetQuestsOnMap) then return end
+	for _, q in ipairs(C_QuestLog.GetQuestsOnMap(mapID) or NONE) do
+		if q.questID == questID and q.x and q.y then
+			local u, v = mod.ToWorld(mapID, q.x, q.y)
+			return u, v, mapID
+		end
+	end
+end
+
 -- a quest you can start: its name, and the quest line it begins (the game's own words)
 local function EnterOffer(pin)
 	local q = pin.data

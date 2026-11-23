@@ -28,7 +28,8 @@
 -- panel), OpenMap's menu, the pins' list and cards, the quill, and Report a problem (without its note
 -- step: the game's popups run the Gamepad UI's own code), and the quests in your log (Quests.lua: every
 -- one is OpenMap's icon here, Blizzard's pins being on its map under this view, unseen), with the
--- "!" of the ones to start in the zone Blizzard's map is on. Not yet: the quest log's quest areas.
+-- "!" of the ones to start in the zone Blizzard's map is on, and your corpse. A quest picked in the quest
+-- log beside the map has the view go to its icon. Not yet: the quest log's quest areas.
 --------------------------------------------------------------------------------
 
 local _, ns = ...
@@ -462,6 +463,81 @@ function mod.PadQuestFocus(questID, mapID)
 	ShowArea()
 end
 
+-- A quest picked in the quest log beside the map (its details opened: the D-pad's A or a click there, the
+-- tracker): the view goes to its icon, its zone in view, as the usual map follows Blizzard's to that zone.
+-- Blizzard's map underneath goes there itself (QuestMapFrame_ShowQuestDetails: GetQuestUiMapID, the zone
+-- to turn it in once it's complete), unseen; this view is OpenMap's and didn't follow it
+local picked                    -- { quest, map } the view went to (Blizzard's call runs again inside itself)
+
+local function ToQuest(questID)
+	if not (questID and built and On() and view:IsShown()) then return end
+	local d = _G.QuestMapFrame and QuestMapFrame.DetailsFrame
+	local mapID = d and d.questMapID
+	if mapID == 0 then mapID = nil end
+	if picked and picked[1] == questID and picked[2] == mapID then return end
+	picked = { questID, mapID }
+	local wu, wv, zone
+	if mod.QuestWorld then wu, wv, zone = mod.QuestWorld(questID, mapID) end
+	zone = zone or mapID
+	-- (the zone it's in, whole: a city's or a cave's quest, the zone round it)
+	while zone and not Stitchable(zone) do
+		local info = C_Map.GetMapInfo(zone)
+		zone = info and info.parentMapID and info.parentMapID > 0 and info.parentMapID or nil
+	end
+	if not wu and zone and zone ~= WORLD then
+		local l, r, t, b = S.Rect(zone)
+		wu, wv = (l + r) / 2, (t + b) / 2
+	end
+	if not wu then return end
+	GlideTo(wu, wv, (zone and zone ~= WORLD) and FitZoom(zone) or zoom)
+end
+
+-- Your corpse, as Blizzard's map shows it (its DeathMapDataProvider: the game's corpse position on the map
+-- it's on, its CorpsePinTemplate's tombstone). Blizzard's is on its map under this view, unseen
+local CORPSE = { texture = "Interface\\Minimap\\POIIcons", coords = { 0.56640625, 0.6328125, 0.001953125, 0.03515625 }, size = 24 }
+local corpse = {}               -- { set, u, v (where it's drawn) }
+
+-- where your corpse is: on the map you're on, else one it's in (the game gives it only on a map that has it)
+local function CorpseWorld()
+	if not (C_DeathInfo and C_DeathInfo.GetCorpseMapPosition and mod.ToWorld) then return end
+	local id = ns.Safe.PlayerPos()
+	while id and id > 0 do
+		if S.Rect(id) then
+			local ok, pos = pcall(C_DeathInfo.GetCorpseMapPosition, id)
+			local x, y
+			if ok and pos then x, y = ns.Safe.XY(pos) end
+			if type(x) == "number" and type(y) == "number" then return mod.ToWorld(id, x, y) end
+		end
+		local info = C_Map.GetMapInfo(id)
+		id = info and info.parentMapID
+	end
+end
+
+local function CorpseEnter(pin)
+	GameTooltip:SetOwner(pin, "ANCHOR_RIGHT")
+	GameTooltip:SetText(_G.CORPSE_RED or _G.CORPSE or "Corpse")
+	GameTooltip:Show()
+end
+
+local function UpdateCorpse()
+	local set = corpse.set
+	if not set then
+		set = S.PinSet("corpse", 0, 6)
+		corpse.set = set
+	end
+	local cu, cv
+	if built and On() then cu, cv = CorpseWorld() end
+	if cu == corpse.u and cv == corpse.v then return end
+	if mod.PadViewForget then mod.PadViewForget(set.pins) end
+	S.ClearPinSet(set)
+	corpse.u, corpse.v = cu, cv
+	if not cu then return end
+	local pin = S.AddPin(set, cu, cv, CORPSE, {})
+	pin:SetScript("OnEnter", CorpseEnter)
+	pin:SetScript("OnLeave", GameTooltip_Hide)
+	pin.openmapNoPress = true       -- (A over it zooms in, as beside it)
+end
+
 --------------------------------------------------------------------------------
 -- Other addons' icons: Questie's, TomTom's, gatherers' ... HereBeDragons (each addon's copy of its pins
 -- library) puts each on Blizzard's map, under this view and unseen; there, each map change places every
@@ -737,6 +813,7 @@ local function OnUpdate(_, elapsed)
 	if groupWait <= 0 then
 		groupWait = GROUP_EVERY
 		if mod.RefreshGroup then pcall(mod.RefreshGroup) end
+		pcall(UpdateCorpse)
 	end
 	if dirty then Apply() end
 	Pointer(x, y)
@@ -941,6 +1018,11 @@ local function Show()
 	pcall(place.Blizzard, 0)
 	view:Show()
 	dirty = true
+	pcall(UpdateCorpse)
+	-- (opened for a quest's details, the tracker's click: to that quest, as they'd have it)
+	local d = _G.QuestMapFrame and QuestMapFrame.DetailsFrame
+	picked = nil
+	if d and d:IsShown() and d.questID then ToQuest(d.questID) end
 end
 
 local function Hide()
@@ -957,7 +1039,7 @@ local function Hide()
 	area.hoverQ, area.hoverM = nil, nil
 	ShowArea()
 	if built then pcall(place.Blizzard, 1) end
-	glide, lastX, lastY = nil, nil, nil
+	glide, lastX, lastY, picked = nil, nil, nil, nil
 	if sc and sc.Child then sc.Child:SetAlpha(1) end
 end
 
@@ -1105,6 +1187,14 @@ local function Setup()
 	end
 	if map.NavigateToParentMap then
 		hooksecurefunc(map, "NavigateToParentMap", function() if view:IsShown() then Step(false) end end)
+	end
+	-- a quest's details opened in the quest log beside the map: the view to that quest (ToQuest)
+	if type(_G.QuestMapFrame_ShowQuestDetails) == "function" then
+		hooksecurefunc("QuestMapFrame_ShowQuestDetails", function(questID) if view:IsShown() then ToQuest(questID) end end)
+	end
+	local details = _G.QuestMapFrame and QuestMapFrame.DetailsFrame
+	if details and details.HookScript then
+		details:HookScript("OnHide", function() picked = nil end)   -- (the same quest again goes to it again)
 	end
 	-- the left stick pressed: its waypoint put again where this view's cursor is (PadPressed)
 	if map.GamepadTryPlaceWaypoint then

@@ -1,5 +1,15 @@
 # OpenMap changelog
 
+## Unreleased
+
+### Fixed
+
+- **The controller map goes to a quest you pick in the quest log**: with the Gamepad UI, picking a quest in
+  the log beside the map left the map where it was. It now goes to the quest's icon, its zone in view, in
+  another zone too: once it's complete, where you turn it in.
+- **Your corpse on the controller map**: with the Gamepad UI, the tombstone where you died wasn't shown as
+  you ran back to it. It is now, as on Blizzard's map.
+
 ## v0.8.13 (2026-11-22)
 
 ### Fixed
