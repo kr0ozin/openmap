@@ -5,8 +5,10 @@
 ### Fixed
 
 - **The controller map goes to a quest you pick in the quest log**: with the Gamepad UI, picking a quest in
-  the log beside the map left the map where it was. It now goes to the quest's icon, its zone in view, in
-  another zone too: once it's complete, where you turn it in.
+  the log beside the map (A), or focusing it (X), left the map where it was. It now goes to the quest's
+  icon, its zone in view, in another zone too: once it's complete, where you turn it in.
+- **No quest tooltip left on screen on the controller map**: a Questie icon's tooltip could stay up after
+  the cursor left it, even with the map closed, when Questie drew its icons again meanwhile.
 - **Your corpse on the controller map**: with the Gamepad UI, the tombstone where you died wasn't shown as
   you ran back to it. It is now, as on Blizzard's map.
 

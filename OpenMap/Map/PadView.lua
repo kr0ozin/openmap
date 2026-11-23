@@ -464,20 +464,33 @@ function mod.PadQuestFocus(questID, mapID)
 end
 
 -- A quest picked in the quest log beside the map (its details opened: the D-pad's A or a click there, the
--- tracker): the view goes to its icon, its zone in view, as the usual map follows Blizzard's to that zone.
--- Blizzard's map underneath goes there itself (QuestMapFrame_ShowQuestDetails: GetQuestUiMapID, the zone
--- to turn it in once it's complete), unseen; this view is OpenMap's and didn't follow it
+-- tracker; or focused, the pad's X): the view goes to its icon, its zone in view, as the usual map follows
+-- Blizzard's to that zone. Blizzard's map underneath goes there itself for its details
+-- (QuestMapFrame_ShowQuestDetails: GetQuestUiMapID, the zone to turn it in once it's complete), unseen;
+-- this view is OpenMap's and didn't follow it
 local picked                    -- { quest, map } the view went to (Blizzard's call runs again inside itself)
 
-local function ToQuest(questID)
-	if not (questID and built and On() and view:IsShown()) then return end
-	local d = _G.QuestMapFrame and QuestMapFrame.DetailsFrame
-	local mapID = d and d.questMapID
+-- (mapID: the quest log's map for it, its details' if they're up, else the game's for it)
+local function ToQuest(questID, mapID)
+	if not questID then return end
+	if not (built and On() and view:IsShown()) then
+		diag.quest = ("quest %s picked, the view not up"):format(tostring(questID))
+		return
+	end
+	if not mapID then
+		local find = _G.GetQuestUiMapID
+		if find then
+			local ok, id = pcall(find, questID)
+			if ok then mapID = id end
+		end
+	end
 	if mapID == 0 then mapID = nil end
 	if picked and picked[1] == questID and picked[2] == mapID then return end
 	picked = { questID, mapID }
 	local wu, wv, zone
 	if mod.QuestWorld then wu, wv, zone = mod.QuestWorld(questID, mapID) end
+	diag.quest = ("quest %s on map %s: icon %s"):format(tostring(questID), tostring(mapID),
+		wu and ("%.3f, %.3f"):format(wu, wv) or "none")
 	zone = zone or mapID
 	-- (the zone it's in, whole: a city's or a cave's quest, the zone round it)
 	while zone and not Stitchable(zone) do
@@ -488,8 +501,12 @@ local function ToQuest(questID)
 		local l, r, t, b = S.Rect(zone)
 		wu, wv = (l + r) / 2, (t + b) / 2
 	end
-	if not wu then return end
+	if not wu then
+		diag.quest = diag.quest .. ", nowhere to go"
+		return
+	end
 	GlideTo(wu, wv, (zone and zone ~= WORLD) and FitZoom(zone) or zoom)
+	diag.quest = diag.quest .. (", went to %.3f, %.3f"):format(wu, wv)
 end
 
 -- Your corpse, as Blizzard's map shows it (its DeathMapDataProvider: the game's corpse position on the map
@@ -501,16 +518,22 @@ local corpse = {}               -- { set, u, v (where it's drawn) }
 local function CorpseWorld()
 	if not (C_DeathInfo and C_DeathInfo.GetCorpseMapPosition and mod.ToWorld) then return end
 	local id = ns.Safe.PlayerPos()
+	local tried = {}
 	while id and id > 0 do
 		if S.Rect(id) then
 			local ok, pos = pcall(C_DeathInfo.GetCorpseMapPosition, id)
 			local x, y
 			if ok and pos then x, y = ns.Safe.XY(pos) end
-			if type(x) == "number" and type(y) == "number" then return mod.ToWorld(id, x, y) end
+			if type(x) == "number" and type(y) == "number" then
+				diag.corpse = ("on map %d at %.3f, %.3f"):format(id, x, y)
+				return mod.ToWorld(id, x, y)
+			end
+			tried[#tried + 1] = id .. (not ok and " (error)" or pos and " (unreadable)" or "")
 		end
 		local info = C_Map.GetMapInfo(id)
 		id = info and info.parentMapID
 	end
+	diag.corpse = #tried > 0 and ("none on maps " .. table.concat(tried, ", ")) or "no map to ask"
 end
 
 local function CorpseEnter(pin)
@@ -694,6 +717,7 @@ end
 
 -- the icon under the cursor gets the mouse's enter and leave (its tooltip, its highlight), as on the
 -- usual map (Gamepad.lua)
+local questieTipUp              -- the tooltip QuestieTip showed for the hovered icon (hidden as it's left)
 local function Enter(pin)
 	if pin == hovered then return end
 	local was = hovered
@@ -702,13 +726,16 @@ local function Enter(pin)
 		if was.UnlockHighlight then was:UnlockHighlight() end
 		local leave = was:GetScript("OnLeave")
 		if leave then pcall(leave, was, false) end
-		local own = _G.QuestieGamepadMapTooltip
-		if questieShown[was] and own and own ~= GameTooltip then own:Hide() end
+		-- (Questie's tooltip hidden whether or not its icon is still on the view: one Questie drew again, or one
+		-- gone out of view, left it up, even after the map closed)
+		if questieTipUp then questieTipUp:Hide() questieTipUp = nil end
+		if GameTooltip and GameTooltip.IsOwned and GameTooltip:IsOwned(was) then GameTooltip:Hide() end
 	end
 	if pin then
 		if pin.LockHighlight then pin:LockHighlight() end
 		if questieShown[pin] and questieAt[pin] and questieAt[pin][3] then   -- (Questie's: its tooltip from this view)
-			QuestieTip(pin, _G.QuestieGamepadMapTooltip or GameTooltip)
+			questieTipUp = _G.QuestieGamepadMapTooltip or GameTooltip
+			QuestieTip(pin, questieTipUp)
 		else
 			local enter = pin:GetScript("OnEnter")
 			if enter then pcall(enter, pin, false) end
@@ -1022,7 +1049,7 @@ local function Show()
 	-- (opened for a quest's details, the tracker's click: to that quest, as they'd have it)
 	local d = _G.QuestMapFrame and QuestMapFrame.DetailsFrame
 	picked = nil
-	if d and d:IsShown() and d.questID then ToQuest(d.questID) end
+	if d and d:IsShown() and d.questID then ToQuest(d.questID, d.questMapID) end
 end
 
 local function Hide()
@@ -1063,6 +1090,8 @@ function mod.PadViewDiag()
 		tostring(On()), diag.started, diag.setup, diag.shows, diag.why, tostring(view and view:IsShown() or false),
 		view and ("%.0f x %.0f"):format(view:GetWidth(), view:GetHeight()) or "-",
 		diag.panel or tostring(mod.PanelBuilt and mod.PanelBuilt() or false))
+	ns:Print("Quest log: hooked %s; last: %s. Corpse: %s.", diag.questHooks or "nothing", diag.quest or "none picked yet",
+		diag.corpse or "not looked for yet")
 end
 
 -- The waypoint. Blizzard's own, the left stick pressed (GamepadTryPlaceWaypoint), goes where its cursor is
@@ -1190,7 +1219,11 @@ local function Setup()
 	end
 	-- a quest's details opened in the quest log beside the map: the view to that quest (ToQuest)
 	if type(_G.QuestMapFrame_ShowQuestDetails) == "function" then
-		hooksecurefunc("QuestMapFrame_ShowQuestDetails", function(questID) if view:IsShown() then ToQuest(questID) end end)
+		diag.questHooks = "details"
+		hooksecurefunc("QuestMapFrame_ShowQuestDetails", function(questID)
+			local d = _G.QuestMapFrame and QuestMapFrame.DetailsFrame
+			ToQuest(questID, d and d.questMapID)
+		end)
 	end
 	local details = _G.QuestMapFrame and QuestMapFrame.DetailsFrame
 	if details and details.HookScript then
@@ -1209,7 +1242,19 @@ local function Setup()
 	end)
 	local owner = {}
 	ns.RegisterEvent(owner, "USER_WAYPOINT_UPDATED", OnWaypoint)
-	ns.RegisterEvent(owner, "SUPER_TRACKING_CHANGED", function() if built and mod.RefreshWaypoint then pcall(mod.RefreshWaypoint) end end)
+	ns.RegisterEvent(owner, "SUPER_TRACKING_CHANGED", function()
+		if built and mod.RefreshWaypoint then pcall(mod.RefreshWaypoint) end
+		-- X on a quest in the log or its details (Blizzard's FocusSelectedQuest, bound as a closure made as its
+		-- map was set up, so not hookable): focused, the view to it; unfocused, left as it is
+		local inLog = (map.IsQuestFocused and map:IsQuestFocused()) or (map.IsQuestDetailsFocused and map:IsQuestDetailsFocused())
+		local q = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
+		if inLog and q and q ~= 0 then
+			picked = nil
+			ToQuest(q)
+		end
+	end)
+	diag.questHooks = (diag.questHooks and diag.questHooks .. ", " or "") .. "focus"
+
 	ns.RegisterEvent(owner, "INPUT_DEVICE_INTERFACE_TRANSITION", function()
 		if map:IsShown() then if On() then Show() else Hide() end end
 	end)
